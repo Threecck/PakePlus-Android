@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
+    <title>视角转换阅读器</title>
+    <style>
+        @font-face {
+            font-family: 'JingHua';
+            src: url('京華老宋体.woff2') format('woff2');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }
+        
+        :root {
+            --bg: #fafafa;
+            --bg-elevated: #ffffff;
+            --bg-pressed: #f0f0f0;
+            --text-primary: #1a1a1a;
+            --text-secondary: #666666;
+            --text-tertiary: #999999;
+            --border: rgba(0,0,0,0.08);
+            --border-strong: rgba(0,0,0,0.15);
+            --accent: #1a1a1a;
+            --accent-light: #404040;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.06);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.08);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --safe-b: env(safe-area-inset-bottom, 0px);
+            --tab-h: calc(64px + var(--safe-b));
+            --font-sans: 'JingHua', -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", serif;
+            --font-serif: 'JingHua', Georgia, serif;
+        }
+        
+        [data-theme="dark"] {
+            --bg: #0a0a0a;
+            --bg-elevated: #141414;
+            --bg-pressed: #1f1f1f;
+            --text-primary: #f5f5f5;
+            --text-secondary: #a0a0a0;
+            --text-tertiary: #666666;
+            --border: rgba(255,255,255,0.08);
+            --border-strong: rgba(255,255,255,0.15);
+            --accent: #f5f5f5;
+            --accent-light: #cccccc;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,0.2);
+            --shadow-md: 0 4px 12px rgba(0,0,0,0.3);
+            --shadow-lg: 0 8px 24px rgba(0,0,0,0.4);
+        }
+        
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        html {
+            height: 100%;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        body {
+            font-family: var(--font-sans);
+            background: var(--bg);
+            color: var(--text-primary);
+            height: 100%;
+            overflow: hidden;
+            line-height: 1.6;
+            letter-spacing: -0.01em;
+        }
+        
+        /* Typography Scale */
+        .text-display { font-size: 32px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.2; }
+        .text-title { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+        .text-headline { font-size: 17px; font-weight: 600; }
+        .text-body { font-size: 15px; font-weight: 400; line-height: 1.7; }
+        .text-caption { font-size: 13px; font-weight: 400; color: var(--text-secondary); }
+        .text-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-tertiary); }
+        
+        /* Page Layout */
+        .page {
+            position: absolute;
+            inset: 0;
+            bottom: var(--tab-h);
+            overflow-y: auto;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            -webkit-overflow-scrolling: touch;
+        }
+        .page.active { opacity: 1; visibility: visible; }
+        .page::-webkit-scrollbar { display: none; }
+        
+        /* Navigation */
+        .tab-bar {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: var(--tab-h);
+            padding-bottom: var(--safe-b);
+            background: var(--bg-elevated);
+            border-top: 1px solid var(--border);
+            display: flex;
+            z-index: 500;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+        }
+        .tab {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            background: none;
+            border: none;
+            color: var(--text-tertiary);
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 8px 0;
+            transition: color 0.2s ease;
+        }
+        .tab.active { color: var(--text-primary); }
+        .tab-icon {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: transform 0.2s ease;
+        }
+        .tab:active .tab-icon { transform: scale(0.9); }
+        
+        /* Buttons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 14px 24px;
+            min-height: 48px;
+            border: none;
+            border-radius: var(--radius-md);
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            font-family: inherit;
+        }
+        .btn:active { transform: scale(0.98); }
+        .btn-primary {
+            background: var(--accent);
+            color: var(--bg);
+            box-shadow: var(--shadow-sm);
+        }
+        .btn-primary:hover { box-shadow: var(--shadow-md); }
+        .btn-secondary {
+            background: var(--bg-pressed);
+            color: var(--text-primary);
+        }
+        .btn-ghost {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border-strong);
+        }
+        .btn-block { width: 100%; }
+        
+        .icon-btn {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: none;
+            color: var(--text-primary);
+            font-size: 20px;
+            cursor: pointer;
+            border-radius: var(--radius-sm);
+            transition: background 0.15s ease;
+        }
+        .icon-btn:hover { background: var(--bg-pressed); }
+        
+        /* Home Page */
+        .home-hero {
+            padding: 80px 24px 48px;
+            text-align: center;
+        }
+        .home-hero h1 {
+            font-size: 28px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+        }
+        .home-hero p {
+            font-size: 15px;
+            color: var(--text-secondary);
+            font-weight: 400;
+        }
+        
+        .features-list {
+            padding: 0 20px;
+            margin-bottom: 32px;
+        }
+        .feature-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 16px;
+            padding: 20px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            margin-bottom: 12px;
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .feature-item:active {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+        }
+        .feature-icon {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .feature-content h3 {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+        .feature-content p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+        
+        /* Shelf Page */
+        .page-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            position: sticky;
+            top: 0;
+            background: var(--bg);
+            z-index: 10;
+            border-bottom: 1px solid var(--border);
+        }
+        .page-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+        }
+        
+        .shelf-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            padding: 16px;
+        }
+        .book-card {
+            aspect-ratio: 3/4;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 16px;
+            cursor: pointer;
+            position: relative;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.2s ease;
+        }
+        .book-card:hover { box-shadow: var(--shadow-md); }
+        .book-card:active { transform: scale(0.98); }
+        .book-cover {
+            width: 48px;
+            height: 64px;
+            background: linear-gradient(135deg, var(--bg-pressed), var(--border));
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+        .book-title {
+            font-size: 12px;
+            text-align: center;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            font-weight: 500;
+            line-height: 1.4;
+        }
+        .book-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: var(--accent);
+            color: var(--bg);
+            font-size: 9px;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+        }
+        
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 120px 20px;
+            color: var(--text-tertiary);
+        }
+        .empty-state-icon {
+            width: 64px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            font-size: 28px;
+            margin-bottom: 16px;
+        }
+        
+        /* Reader Page */
+        .reader-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        .reader-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            max-width: 50%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .reader-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 32px 24px;
+            line-height: 1.9;
+            font-size: var(--read-fs, 17px);
+            font-family: var(--font-serif);
+        }
+        .reader-body p {
+            margin-bottom: 1.2em;
+            text-indent: 2em;
+            color: var(--text-primary);
+        }
+        .reader-body h1, .reader-body h2, .reader-body h3 {
+            font-family: var(--font-sans);
+            font-weight: 600;
+            margin: 1.5em 0 0.8em;
+            text-indent: 0;
+        }
+        
+        .reader-actions {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            padding: 16px 24px calc(16px + var(--safe-b));
+            background: var(--bg-elevated);
+            border-top: 1px solid var(--border);
+            position: sticky;
+            bottom: 0;
+        }
+        .reader-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            padding: 8px 16px;
+            transition: color 0.15s ease;
+        }
+        .reader-btn:hover { color: var(--text-primary); }
+        .reader-btn.primary { color: var(--accent); }
+        .reader-btn-icon {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+        }
+        
+        /* Drawer */
+        .drawer-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            z-index: 600;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.3s ease;
+        }
+        .drawer-mask.show { opacity: 1; visibility: visible; }
+        
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 80%;
+            max-width: 340px;
+            background: var(--bg-elevated);
+            z-index: 601;
+            transform: translateX(100%);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-lg);
+        }
+        .drawer.show { transform: translateX(0); }
+        
+        .drawer-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .drawer-header h3 {
+            font-size: 17px;
+            font-weight: 600;
+        }
+        
+        .drawer-body {
+            flex: 1;
+            overflow-y: auto;
+            padding: 8px 0;
+        }
+        .chapter-item {
+            padding: 14px 20px;
+            font-size: 14px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 1px solid var(--border);
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .chapter-item:hover { background: var(--bg); }
+        .chapter-item.active {
+            color: var(--text-primary);
+            background: var(--bg);
+            font-weight: 500;
+        }
+        .chapter-status {
+            font-size: 12px;
+            color: var(--text-tertiary);
+        }
+        
+        /* Settings Page */
+        .settings-section {
+            padding: 24px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        .settings-section:last-child { border-bottom: none; }
+        
+        .section-header {
+            margin-bottom: 20px;
+        }
+        .section-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-tertiary);
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group:last-child { margin-bottom: 0; }
+        .form-label {
+            display: block;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+        .form-label span {
+            color: var(--text-tertiary);
+            font-weight: 400;
+            margin-left: 4px;
+        }
+        
+        .form-input, .form-select {
+            width: 100%;
+            padding: 12px 16px;
+            min-height: 48px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            color: var(--text-primary);
+            font-size: 15px;
+            font-family: inherit;
+            -webkit-appearance: none;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .form-input:focus, .form-select:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(0,0,0,0.05);
+        }
+        [data-theme="dark"] .form-input:focus,
+        [data-theme="dark"] .form-select:focus {
+            box-shadow: 0 0 0 3px rgba(255,255,255,0.05);
+        }
+        .form-select {
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            padding-right: 40px;
+        }
+        
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        input[type=range] {
+            flex: 1;
+            height: 4px;
+            -webkit-appearance: none;
+            background: var(--border);
+            border-radius: 2px;
+            outline: none;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: var(--accent);
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.15s ease;
+        }
+        input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.1); }
+        .slider-value {
+            min-width: 28px;
+            text-align: center;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .theme-selector {
+            display: flex;
+            gap: 12px;
+        }
+        .theme-option {
+            flex: 1;
+            padding: 16px;
+            background: var(--bg-elevated);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-md);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .theme-option:hover { border-color: var(--border-strong); }
+        .theme-option.active {
+            border-color: var(--accent);
+            background: var(--bg);
+        }
+        .theme-preview {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            margin: 0 auto 8px;
+            border: 2px solid var(--border);
+        }
+        .theme-option[data-theme="light"] .theme-preview {
+            background: #fafafa;
+            border-color: #e0e0e0;
+        }
+        .theme-option[data-theme="dark"] .theme-preview {
+            background: #0a0a0a;
+            border-color: #333;
+        }
+        .theme-name {
+            font-size: 13px;
+            font-weight: 500;
+        }
+        
+        /* Provider Cards */
+        .provider-grid {
+            display: grid;
+            gap: 12px;
+        }
+        .provider-card {
+            padding: 16px;
+            background: var(--bg-elevated);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-md);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .provider-card:hover { border-color: var(--border-strong); }
+        .provider-card.active {
+            border-color: var(--accent);
+            background: var(--bg);
+        }
+        .provider-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 4px;
+        }
+        .provider-icon {
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .provider-name {
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .provider-desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-left: 48px;
+        }
+        
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 800;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.25s ease;
+            padding: 20px;
+        }
+        .modal-overlay.show { opacity: 1; visibility: visible; }
+        
+        .modal-content {
+            background: var(--bg-elevated);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            width: 100%;
+            max-width: 320px;
+            text-align: center;
+            box-shadow: var(--shadow-lg);
+            transform: scale(0.95);
+            transition: transform 0.25s ease;
+        }
+        .modal-overlay.show .modal-content { transform: scale(1); }
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        .modal-text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 20px;
+        }
+        
+        .progress-bar {
+            height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+        .progress-fill {
+            height: 100%;
+            width: 0;
+            background: var(--accent);
+            transition: width 0.3s ease;
+        }
+        
+        /* Toast */
+        .toast {
+            position: fixed;
+            bottom: calc(var(--tab-h) + 20px);
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: var(--text-primary);
+            color: var(--bg);
+            padding: 12px 24px;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 900;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: var(--shadow-md);
+        }
+        .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+        
+        body.reading .tab-bar { display: none; }
+        body.reading .page { bottom: 0; }
+        
+        @media (min-width: 769px) {
+            .page {
+                max-width: 480px;
+                margin: 0 auto;
+                left: 50%;
+                transform: translateX(-50%);
+                border-left: 1px solid var(--border);
+                border-right: 1px solid var(--border);
+            }
+            .tab-bar {
+                max-width: 480px;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Home Page -->
+    <section id="pageHome" class="page active">
+        <div class="home-hero">
+            <h1>视角转换阅读器</h1>
+            <p>AI 驱动的性别视角转换工具</p>
+        </div>
+        <div class="features-list">
+            <div class="feature-item">
+                <div class="feature-icon">转</div>
+                <div class="feature-content">
+                    <h3>视角转换</h3>
+                    <p>男性视角 → 女性视角，保留文学特性</p>
+                </div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">衡</div>
+                <div class="feature-content">
+                    <h3>去偏见</h3>
+                    <p>消除知识类文本中的性别歧视元素</p>
+                </div>
+            </div>
+            <div class="feature-item">
+                <div class="feature-icon">私</div>
+                <div class="feature-content">
+                    <h3>本地处理</h3>
+                    <p>数据存储在本地，保护阅读隐私</p>
+                </div>
+            </div>
+        </div>
+        <div style="padding: 0 20px;">
+            <button class="btn btn-primary btn-block" id="btnImportHome">导入书籍</button>
+        </div>
+        <input type="file" id="fileInput" accept=".epub,.txt" hidden multiple>
+    </section>
+
+    <!-- Shelf Page -->
+    <section id="pageShelf" class="page">
+        <header class="page-header">
+            <h2>书架</h2>
+            <button class="icon-btn" id="btnImportShelf">+</button>
+        </header>
+        <div class="shelf-grid" id="shelfGrid"></div>
+        <div class="empty-state" id="emptyHint">
+            <div class="empty-state-icon">书</div>
+            <p>暂无书籍</p>
+        </div>
+    </section>
+
+    <!-- Reader Page -->
+    <section id="pageRead" class="page">
+        <header class="reader-header">
+            <button class="icon-btn" id="btnBack">←</button>
+            <span class="reader-title" id="readTitle">章节</span>
+            <button class="icon-btn" id="btnChapterList">≡</button>
+        </header>
+        <div class="reader-body" id="readBody"></div>
+        <div class="reader-actions">
+            <button class="reader-btn" id="btnPrev">
+                <span class="reader-btn-icon">‹</span>
+                <span>上一章</span>
+            </button>
+            <button class="reader-btn primary" id="btnConvert">
+                <span class="reader-btn-icon">⟲</span>
+                <span>转换</span>
+            </button>
+            <button class="reader-btn" id="btnNext">
+                <span class="reader-btn-icon">›</span>
+                <span>下一章</span>
+            </button>
+        </div>
+        <div class="drawer-mask" id="drawerMask"></div>
+        <div class="drawer" id="drawer">
+            <div class="drawer-header">
+                <h3>目录</h3>
+                <button class="icon-btn" id="btnCloseDrawer">×</button>
+            </div>
+            <div class="drawer-body" id="drawerList"></div>
+        </div>
+    </section>
+
+    <!-- Settings Page -->
+    <section id="pageSettings" class="page">
+        <header class="page-header">
+            <h2>设置</h2>
+        </header>
+        
+        <div class="settings-section">
+            <div class="section-header">
+                <div class="section-label">AI 服务商</div>
+            </div>
+            <div class="provider-grid" id="providerGrid">
+                <div class="provider-card" data-provider="openai">
+                    <div class="provider-header">
+                        <div class="provider-icon">O</div>
+                        <div class="provider-name">OpenAI</div>
+                    </div>
+                    <div class="provider-desc">GPT-4 系列模型</div>
+                </div>
+                <div class="provider-card" data-provider="claude">
+                    <div class="provider-header">
+                        <div class="provider-icon">C</div>
+                        <div class="provider-name">Claude</div>
+                    </div>
+                    <div class="provider-desc">Anthropic  Claude 模型</div>
+                </div>
+                <div class="provider-card" data-provider="glm">
+                    <div class="provider-header">
+                        <div class="provider-icon">G</div>
+                        <div class="provider-name">智谱 GLM</div>
+                    </div>
+                    <div class="provider-desc">GLM-4 / GLM-5 系列</div>
+                </div>
+                <div class="provider-card" data-provider="ollama">
+                    <div class="provider-header">
+                        <div class="provider-icon">L</div>
+                        <div class="provider-name">Ollama</div>
+                    </div>
+                    <div class="provider-desc">本地部署模型</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-header">
+                <div class="section-label">API 配置</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">API Key</label>
+                <input type="password" id="cfgKey" class="form-input" placeholder="输入您的 API Key">
+            </div>
+            <div class="form-group">
+                <label class="form-label">模型 <span id="modelHint">如: gpt-4o</span></label>
+                <input type="text" id="cfgModel" class="form-input" placeholder="glm-4-flash">
+            </div>
+            <div class="form-group" id="urlGroup">
+                <label class="form-label">API 地址</label>
+                <input type="text" id="cfgUrl" class="form-input" placeholder="https://open.bigmodel.cn/api/paas/v4">
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-header">
+                <div class="section-label">转换设置</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">转换模式</label>
+                <select id="cfgMode" class="form-select">
+                    <option value="literary">文学叙事</option>
+                    <option value="debias">去偏见</option>
+                    <option value="balanced">智能平衡</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">转换强度</label>
+                <div class="slider-container">
+                    <input type="range" id="cfgIntensity" min="1" max="5" value="3">
+                    <span class="slider-value" id="valIntensity">3</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <div class="section-header">
+                <div class="section-label">阅读设置</div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">字号</label>
+                <div class="slider-container">
+                    <input type="range" id="cfgFontSize" min="14" max="24" value="17">
+                    <span class="slider-value" id="valFontSize">17</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">主题</label>
+                <div class="theme-selector">
+                    <div class="theme-option active" data-theme="light">
+                        <div class="theme-preview"></div>
+                        <div class="theme-name">浅色</div>
+                    </div>
+                    <div class="theme-option" data-theme="dark">
+                        <div class="theme-preview"></div>
+                        <div class="theme-name">深色</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="settings-section">
+            <button class="btn btn-primary btn-block" id="btnSaveCfg">保存设置</button>
+        </div>
+    </section>
+
+    <!-- Progress Modal -->
+    <div class="modal-overlay" id="overlayProgress">
+        <div class="modal-content">
+            <div class="modal-title">正在转换</div>
+            <div class="modal-text" id="progText">准备中...</div>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progFill"></div>
+            </div>
+            <button class="btn btn-secondary btn-block" id="btnCancelConvert">取消</button>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <!-- Tab Bar -->
+    <nav class="tab-bar">
+        <button class="tab active" data-p="pageHome">
+            <span class="tab-icon">⌂</span>
+            <span>首页</span>
+        </button>
+        <button class="tab" data-p="pageShelf">
+            <span class="tab-icon">▤</span>
+            <span>书架</span>
+        </button>
+        <button class="tab" data-p="pageSettings">
+            <span class="tab-icon">◉</span>
+            <span>设置</span>
+        </button>
+    </nav>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        // Utilities
+        const U = {
+            id: () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+            esc: s => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML },
+            toast: (msg, ms = 2500) => { 
+                const t = document.getElementById('toast'); 
+                t.textContent = msg; 
+                t.classList.add('show'); 
+                clearTimeout(t._t); 
+                t._t = setTimeout(() => t.classList.remove('show'), ms) 
+            },
+            sleep: ms => new Promise(r => setTimeout(r, ms)),
+            splitP: text => text.split(/\n\s*\n/).map(p => p.trim()).filter(p => p),
+            textToHtml: text => U.splitP(text).map(p => '<p>' + U.esc(p) + '</p>').join('')
+        };
+
+        // Storage
+        const Store = {
+            _data: null,
+            _defaults: { 
+                books: [], 
+                cfg: { 
+                    provider: 'glm', 
+                    key: '', 
+                    model: 'glm-4-flash', 
+                    url: 'https://open.bigmodel.cn/api/paas/v4', 
+                    mode: 'literary', 
+                    intensity: 3, 
+                    fontSize: 17, 
+                    theme: 'light' 
+                } 
+            },
+            init() { 
+                try { this._data = JSON.parse(localStorage.getItem('psr') || 'null') } 
+                catch { this._data = null } 
+                if (!this._data) this._data = JSON.parse(JSON.stringify(this._defaults)) 
+            },
+            save() { localStorage.setItem('psr', JSON.stringify(this._data)) },
+            get books() { return this._data.books },
+            get cfg() { return this._data.cfg },
+            set cfg(v) { this._data.cfg = { ...this._data.cfg, ...v }; this.save() },
+            addBook(book) { 
+                book.id = U.id(); 
+                book.addedAt = Date.now(); 
+                book.chapters = book.chapters || []; 
+                this._data.books.unshift(book); 
+                this.save(); 
+                return book 
+            },
+            deleteBook(id) { this._data.books = this._data.books.filter(b => b.id !== id); this.save() }
+        };
+
+        // Parser
+        const Parser = {
+            async parse(file) { 
+                const ext = file.name.split('.').pop().toLowerCase(); 
+                if (ext === 'epub') return this._epub(file); 
+                if (ext === 'txt') return this._txt(file); 
+                throw new Error('不支持的格式: .' + ext) 
+            },
+            async _epub(file) { 
+                const buf = await file.arrayBuffer(); 
+                const zip = await JSZip.loadAsync(buf); 
+                const container = await zip.file('META-INF/container.xml')?.async('text'); 
+                if (!container) throw new Error('无效的EPUB'); 
+                const cDoc = new DOMParser().parseFromString(container, 'application/xml'); 
+                const rootPath = cDoc.querySelector('rootfile')?.getAttribute('full-path'); 
+                if (!rootPath) throw new Error('无效的EPUB'); 
+                const dir = rootPath.substring(0, rootPath.lastIndexOf('/') + 1); 
+                const opfXml = await zip.file(rootPath)?.async('text'); 
+                if (!opfXml) throw new Error('无效的EPUB'); 
+                const oDoc = new DOMParser().parseFromString(opfXml, 'application/xml'); 
+                const title = oDoc.querySelector('title, dc\\:title')?.textContent || file.name.replace(/\.epub$/i, ''); 
+                const author = oDoc.querySelector('creator, dc\\:creator')?.textContent || '未知'; 
+                const manifest = {}; 
+                oDoc.querySelectorAll('manifest item').forEach(i => { manifest[i.getAttribute('id')] = i.getAttribute('href') }); 
+                const spineIds = []; 
+                oDoc.querySelectorAll('spine itemref').forEach(r => spineIds.push(r.getAttribute('idref'))); 
+                const chapters = []; 
+                const seen = new Set(); 
+                for (const id of spineIds) { 
+                    const href = manifest[id]; 
+                    if (!href || seen.has(href)) continue; 
+                    seen.add(href); 
+                    const path = dir + decodeURIComponent(href); 
+                    const html = await zip.file(path)?.async('text'); 
+                    if (!html) continue; 
+                    const doc = new DOMParser().parseFromString(html, 'text/html'); 
+                    const body = doc.querySelector('body'); 
+                    if (!body) continue; 
+                    body.querySelectorAll('script,style').forEach(e => e.remove()); 
+                    const text = body.textContent.trim(); 
+                    if (text.length < 50) continue; 
+                    const h = doc.querySelector('h1,h2,h3'); 
+                    chapters.push({ title: h ? h.textContent.trim() : ('第' + (chapters.length + 1) + '章'), content: text, converted: null }) 
+                } 
+                if (!chapters.length) throw new Error('未能提取到章节内容'); 
+                return { title: title.trim(), author: author.trim(), chapters } 
+            },
+            async _txt(file) { 
+                let text = await file.text(); 
+                const lines = text.split('\n'); 
+                const chapters = []; 
+                let current = { title: '开始', content: [] }; 
+                const chapterPattern = /^(第[一二三四五六七八九十百千零\d]+章|Chapter\s+\d+|\d+\.|【.*?】|第\d+章)/i; 
+                for (const line of lines) { 
+                    const trimmed = line.trim(); 
+                    if (chapterPattern.test(trimmed) && trimmed.length < 50) { 
+                        if (current.content.length) { 
+                            chapters.push({ title: current.title, content: current.content.join('\n'), converted: null }) 
+                        } 
+                        current = { title: trimmed, content: [] } 
+                    } else if (trimmed) { current.content.push(trimmed) } 
+                } 
+                if (current.content.length) { 
+                    chapters.push({ title: current.title, content: current.content.join('\n'), converted: null }) 
+                } 
+                if (!chapters.length) { 
+                    const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim()); 
+                    const chunkSize = 5000; 
+                    for (let i = 0; i < paragraphs.length; i += chunkSize) { 
+                        chapters.push({ title: '第' + (Math.floor(i / chunkSize) + 1) + '部分', content: paragraphs.slice(i, i + chunkSize).join('\n\n'), converted: null }) 
+                    } 
+                } 
+                return { title: file.name.replace(/\.txt$/i, ''), author: '未知', chapters } 
+            }
+        };
+
+        // AI API
+        const AI = {
+            async chat(systemPrompt, userMsg) {
+                const cfg = Store.cfg;
+                const url = cfg.url.replace(/\/+$/, '');
+                
+                // GLM
+                if (cfg.provider === 'glm') {
+                    const r = await fetch(url + '/chat/completions', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
+                        body: JSON.stringify({
+                            model: cfg.model,
+                            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMsg }],
+                            max_tokens: 4096,
+                            temperature: 0.7
+                        })
+                    });
+                    if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error?.message || 'GLM请求失败(' + r.status + ')') }
+                    const d = await r.json();
+                    return d.choices?.[0]?.message?.content?.trim() || '';
+                }
+                
+                // Ollama
+                if (cfg.provider === 'ollama') {
+                    const r = await fetch(url + '/api/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: cfg.model,
+                            messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMsg }],
+                            stream: false
+                        })
+                    });
+                    if (!r.ok) throw new Error('Ollama请求失败:' + r.status);
+                    const d = await r.json();
+                    return d.message?.content?.trim() || '';
+                }
+                
+                // Claude
+                if (cfg.provider === 'claude') {
+                    const r = await fetch(url + '/messages', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'x-api-key': cfg.key,
+                            'anthropic-version': '2023-06-01',
+                            'anthropic-dangerous-direct-browser-access': 'true'
+                        },
+                        body: JSON.stringify({
+                            model: cfg.model,
+                            max_tokens: 4096,
+                            system: systemPrompt,
+                            messages: [{ role: 'user', content: userMsg }]
+                        })
+                    });
+                    if (!r.ok) throw new Error('Claude请求失败:' + r.status);
+                    const d = await r.json();
+                    return d.content?.[0]?.text?.trim() || '';
+                }
+                
+                // OpenAI
+                const r = await fetch(url + '/chat/completions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cfg.key },
+                    body: JSON.stringify({
+                        model: cfg.model,
+                        messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userMsg }],
+                        max_tokens: 4096,
+                        temperature: 0.7
+                    })
+                });
+                if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.error?.message || 'API请求失败(' + r.status + ')') }
+                const d = await r.json();
+                return d.choices?.[0]?.message?.content?.trim() || '';
+            }
+        };
+
+        // Prompts
+        const Prompt = {
+            build(mode, intensity) {
+                const base = `你是一位资深文学编辑和性别视角转换专家。你的任务是对文本进行性别视角转换。
+
+## 工作原则
+- 保持原文的文学价值和艺术水准
+- 转换后的文本应当自然流畅，不露痕迹
+- 保持人物性格核心特征，仅调整性别相关表达
+- 保留原文的修辞手法（比喻、拟人、排比等）
+
+## 绝对禁止
+- 不得生成色情、暴力、恐怖内容
+- 不得包含宗教宣传或宗教歧视
+- 不得包含政治立场表达或政治敏感内容
+- 不得生成种族歧视或仇恨内容
+
+## 输出要求
+- 仅输出转换后的纯文本
+- 不添加前言、后记、解释或注释
+- 保持与原文相同的段落结构`;
+                const modes = {
+                    literary: `\n## 模式：文学叙事视角转换（强度${intensity}/5）\n将男性视角叙述转换为女性视角。包括：代词替换、称谓替换、视角调整、心理描写方式调整、社会角色互换。强度越高转换越彻底。`,
+                    debias: `\n## 模式：去性别偏见（强度${intensity}/5）\n识别并修正性别歧视和偏见元素。将不必要的性别化表达替换为性别中立表述，移除职业性别标记，修正性别刻板印象。`,
+                    balanced: `\n## 模式：智能平衡（强度${intensity}/5）\n自动判断文本类型：文学类用视角转换，知识类用去偏见。`
+                };
+                return base + (modes[mode] || modes.literary);
+            },
+            userMsg: text => `【待转换文本】\n${text}\n\n请直接输出转换后的文本。`
+        };
+
+        // State
+        let currentBook = null, currentChapterIdx = 0, abortCtrl = null;
+
+        // Navigation
+        function goPage(id) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(id)?.classList.add('active');
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.p === id));
+            document.body.classList.toggle('reading', id === 'pageRead');
+        }
+
+        // Render
+        function renderShelf() {
+            const grid = document.getElementById('shelfGrid');
+            const hint = document.getElementById('emptyHint');
+            const books = Store.books;
+            if (!books.length) { grid.innerHTML = ''; hint.style.display = ''; return }
+            hint.style.display = 'none';
+            grid.innerHTML = books.map(b => {
+                const convCount = b.chapters.filter(c => c.converted).length;
+                const badge = convCount ? `<span class="book-badge">${convCount}/${b.chapters.length}</span>` : '';
+                return `<div class="book-card" data-id="${b.id}"><div class="book-cover">书</div><div class="book-title">${U.esc(b.title)}</div>${badge}</div>`;
+            }).join('');
+        }
+
+        function openBook(id) {
+            currentBook = Store.books.find(b => b.id === id);
+            if (!currentBook) return;
+            currentChapterIdx = 0;
+            renderChapter();
+            renderDrawer();
+            goPage('pageRead');
+        }
+
+        function renderChapter() {
+            if (!currentBook) return;
+            const ch = currentBook.chapters[currentChapterIdx];
+            document.getElementById('readTitle').textContent = ch.title;
+            const body = document.getElementById('readBody');
+            body.innerHTML = '<h2 style="text-align:center;margin-bottom:32px;font-size:18px;font-weight:600;">' + U.esc(ch.title) + '</h2>' + U.textToHtml(ch.content);
+            body.scrollTop = 0;
+        }
+
+        function renderDrawer() {
+            if (!currentBook) return;
+            const list = document.getElementById('drawerList');
+            list.innerHTML = currentBook.chapters.map((ch, i) => 
+                `<div class="chapter-item${i === currentChapterIdx ? ' active' : ''}" data-i="${i}">${U.esc(ch.title)}${ch.converted ? '<span class="chapter-status">已转换</span>' : ''}</div>`
+            ).join('');
+        }
+
+        async function importBooks(files) {
+            if (!files || !files.length) return;
+            for (const file of files) {
+                try {
+                    U.toast('正在导入: ' + file.name);
+                    const book = await Parser.parse(file);
+                    Store.addBook(book);
+                    U.toast('导入成功: ' + book.title);
+                } catch (e) { U.toast('导入失败: ' + e.message) }
+            }
+            renderShelf();
+        }
+
+        async function convertChapter() {
+            if (!currentBook) { U.toast('请先打开一本书'); return }
+            const cfg = Store.cfg;
+            if (!cfg.key && cfg.provider !== 'ollama') { U.toast('请先在设置中配置API Key'); goPage('pageSettings'); return }
+            
+            const ch = currentBook.chapters[currentChapterIdx];
+            const overlay = document.getElementById('overlayProgress');
+            const fill = document.getElementById('progFill');
+            const pText = document.getElementById('progText');
+            
+            overlay.classList.add('show');
+            fill.style.width = '0%';
+            pText.textContent = '正在转换: ' + ch.title;
+            abortCtrl = new AbortController();
+            
+            const systemPrompt = Prompt.build(cfg.mode, cfg.intensity);
+            const paragraphs = U.splitP(ch.content);
+            
+            try {
+                let result = '';
+                for (let i = 0; i < paragraphs.length; i++) {
+                    if (abortCtrl.signal.aborted) throw new Error('已取消');
+                    const pct = Math.round(((i + 1) / paragraphs.length) * 100);
+                    fill.style.width = pct + '%';
+                    pText.textContent = `${ch.title} (${i + 1}/${paragraphs.length})`;
+                    const resp = await AI.chat(systemPrompt, Prompt.userMsg(paragraphs[i]));
+                    result += (result ? '\n\n' : '') + resp;
+                    if (i < paragraphs.length - 1) await U.sleep(300);
+                }
+                ch.converted = result;
+                Store.save();
+                renderChapter();
+                renderDrawer();
+                renderShelf();
+                U.toast('转换完成');
+            } catch (e) {
+                if (e.message !== '已取消') U.toast('转换失败: ' + e.message);
+            } finally {
+                overlay.classList.remove('show');
+                abortCtrl = null;
+            }
+        }
+
+        // Provider presets
+        const ProviderPresets = {
+            openai: { model: 'gpt-4o', url: 'https://api.openai.com/v1', hint: '如: gpt-4o, gpt-4o-mini' },
+            claude: { model: 'claude-3-5-sonnet-20241022', url: 'https://api.anthropic.com', hint: '如: claude-3-5-sonnet' },
+            glm: { model: 'glm-4-flash', url: 'https://open.bigmodel.cn/api/paas/v4', hint: '如: glm-4-flash, glm-4-plus' },
+            ollama: { model: 'llama3', url: 'http://localhost:11434', hint: '如: llama3, qwen2.5' }
+        };
+
+        function loadCfg() {
+            const c = Store.cfg;
+            
+            // Provider selection
+            document.querySelectorAll('.provider-card').forEach(card => {
+                card.classList.toggle('active', card.dataset.provider === c.provider);
+            });
+            
+            // Form fields
+            document.getElementById('cfgKey').value = c.key;
+            document.getElementById('cfgModel').value = c.model;
+            document.getElementById('cfgUrl').value = c.url;
+            document.getElementById('cfgMode').value = c.mode;
+            document.getElementById('cfgIntensity').value = c.intensity;
+            document.getElementById('valIntensity').textContent = c.intensity;
+            document.getElementById('cfgFontSize').value = c.fontSize;
+            document.getElementById('valFontSize').textContent = c.fontSize;
+            
+            // Theme
+            document.documentElement.setAttribute('data-theme', c.theme);
+            document.querySelectorAll('.theme-option').forEach(b => b.classList.toggle('active', b.dataset.theme === c.theme));
+            document.documentElement.style.setProperty('--read-fs', c.fontSize + 'px');
+            
+            // Update hint
+            const preset = ProviderPresets[c.provider];
+            if (preset) document.getElementById('modelHint').textContent = preset.hint;
+        }
+
+        function saveCfg() {
+            const provider = document.querySelector('.provider-card.active')?.dataset.provider || 'glm';
+            Store.cfg = {
+                provider: provider,
+                key: document.getElementById('cfgKey').value.trim(),
+                model: document.getElementById('cfgModel').value.trim(),
+                url: document.getElementById('cfgUrl').value.trim(),
+                mode: document.getElementById('cfgMode').value,
+                intensity: parseInt(document.getElementById('cfgIntensity').value),
+                fontSize: parseInt(document.getElementById('cfgFontSize').value),
+                theme: document.querySelector('.theme-option.active')?.dataset.theme || 'light'
+            };
+            U.toast('设置已保存');
+        }
+
+        function initGestures() {
+            const el = document.getElementById('readBody');
+            let sx = 0, sy = 0;
+            el.addEventListener('touchstart', e => { sx = e.touches[0].clientX; sy = e.touches[0].clientY }, { passive: true });
+            el.addEventListener('touchend', e => {
+                const dx = sx - e.changedTouches[0].clientX;
+                const dy = sy - e.changedTouches[0].clientY;
+                if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 60) {
+                    if (dx > 0) nextChapter(); else prevChapter();
+                }
+            }, { passive: true });
+        }
+
+        function prevChapter() {
+            if (currentChapterIdx > 0) { currentChapterIdx--; renderChapter(); renderDrawer(); }
+        }
+        function nextChapter() {
+            if (currentBook && currentChapterIdx < currentBook.chapters.length - 1) { currentChapterIdx++; renderChapter(); renderDrawer(); }
+        }
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            Store.init();
+            loadCfg();
+            renderShelf();
+            initGestures();
+            
+            // Tabs
+            document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => goPage(t.dataset.p)));
+            
+            // File import
+            const fileInput = document.getElementById('fileInput');
+            document.getElementById('btnImportHome').addEventListener('click', () => fileInput.click());
+            document.getElementById('btnImportShelf').addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', e => { importBooks(e.target.files); e.target.value = '' });
+            
+            // Shelf
+            document.getElementById('shelfGrid').addEventListener('click', e => {
+                const card = e.target.closest('.book-card');
+                if (card) openBook(card.dataset.id);
+            });
+            
+            // Long press to delete
+            let lpTimer;
+            document.getElementById('shelfGrid').addEventListener('touchstart', e => {
+                const card = e.target.closest('.book-card');
+                if (!card) return;
+                lpTimer = setTimeout(() => {
+                    if (confirm('删除这本书？')) { Store.deleteBook(card.dataset.id); renderShelf(); U.toast('已删除'); }
+                }, 700);
+            }, { passive: true });
+            document.getElementById('shelfGrid').addEventListener('touchend', () => clearTimeout(lpTimer));
+            document.getElementById('shelfGrid').addEventListener('touchmove', () => clearTimeout(lpTimer));
+            
+            // Reader
+            document.getElementById('btnBack').addEventListener('click', () => { renderShelf(); goPage('pageShelf'); });
+            document.getElementById('btnPrev').addEventListener('click', prevChapter);
+            document.getElementById('btnNext').addEventListener('click', nextChapter);
+            document.getElementById('btnConvert').addEventListener('click', convertChapter);
+            document.getElementById('btnCancelConvert').addEventListener('click', () => { if (abortCtrl) abortCtrl.abort(); });
+            
+            // Drawer
+            document.getElementById('btnChapterList').addEventListener('click', () => {
+                document.getElementById('drawer').classList.add('show');
+                document.getElementById('drawerMask').classList.add('show');
+            });
+            const closeDrawer = () => {
+                document.getElementById('drawer').classList.remove('show');
+                document.getElementById('drawerMask').classList.remove('show');
+            };
+            document.getElementById('btnCloseDrawer').addEventListener('click', closeDrawer);
+            document.getElementById('drawerMask').addEventListener('click', closeDrawer);
+            document.getElementById('drawerList').addEventListener('click', e => {
+                const item = e.target.closest('.chapter-item');
+                if (item) { currentChapterIdx = parseInt(item.dataset.i); renderChapter(); renderDrawer(); closeDrawer(); }
+            });
+            
+            // Provider selection
+            document.querySelectorAll('.provider-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    document.querySelectorAll('.provider-card').forEach(c => c.classList.remove('active'));
+                    card.classList.add('active');
+                    const preset = ProviderPresets[card.dataset.provider];
+                    if (preset) {
+                        document.getElementById('cfgModel').value = preset.model;
+                        document.getElementById('cfgUrl').value = preset.url;
+                        document.getElementById('modelHint').textContent = preset.hint;
+                    }
+                });
+            });
+            
+            // Sliders
+            document.getElementById('cfgIntensity').addEventListener('input', e => document.getElementById('valIntensity').textContent = e.target.value);
+            document.getElementById('cfgFontSize').addEventListener('input', e => {
+                document.getElementById('valFontSize').textContent = e.target.value;
+                document.documentElement.style.setProperty('--read-fs', e.target.value + 'px');
+            });
+            
+            // Theme
+            document.querySelectorAll('.theme-option').forEach(b => b.addEventListener('click', () => {
+                document.querySelectorAll('.theme-option').forEach(x => x.classList.remove('active'));
+                b.classList.add('active');
+                document.documentElement.setAttribute('data-theme', b.dataset.theme);
+            }));
+            
+            // Save
+            document.getElementById('btnSaveCfg').addEventListener('click', saveCfg);
+        });
+    </script>
+</body>
+</html>
