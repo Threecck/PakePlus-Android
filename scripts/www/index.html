@@ -5,13 +5,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover">
     <title>视角转换阅读器</title>
     <style>
-        @font-face {
-            font-family: 'JingHua';
-            src: url('京華老宋体.woff2') format('woff2');
-            font-weight: normal;
-            font-style: normal;
-            font-display: swap;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Noto+Serif+SC:wght@400;500;600&display=swap');
         
         :root {
             --bg: #fafafa;
@@ -32,8 +26,8 @@
             --radius-lg: 16px;
             --safe-b: env(safe-area-inset-bottom, 0px);
             --tab-h: calc(64px + var(--safe-b));
-            --font-sans: 'JingHua', -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", serif;
-            --font-serif: 'JingHua', Georgia, serif;
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", sans-serif;
+            --font-serif: 'Noto Serif SC', Georgia, serif;
         }
         
         [data-theme="dark"] {
